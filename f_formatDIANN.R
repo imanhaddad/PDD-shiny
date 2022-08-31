@@ -86,6 +86,10 @@ data_summary <- function(data, varname, groupnames){
   return(data_sum)
 }
 
+
+
+### Upset format and extract
+
 formatUpset <- function(x) {
   
  
@@ -128,16 +132,36 @@ formatUpset <- function(x) {
   }
   
   upsetdata <- merge(condition_list[[1]],condition_list[[2]],by="Protein.Ids",all=TRUE)
+ 
   
   i <- for (i in 3:nlevels(groupe))
   {
     upsetdata <- merge(upsetdata,condition_list[[i]],by="Protein.Ids",all=TRUE)
+   
     
   }
   upsetdata[is.na(upsetdata)]<- 0
+  
+  
+  #data_with_intersection <- upsetdata %>%
+   # unite(col = "intersection", -c("Protein.Ids"), sep = "")
+  
+ # test <- data_with_intersection %>%
+  #  group_by(intersection)%>%
+   # nest()%>%
+    #select(data)%>%
+    #unlist(recursive = F)
+  
+  
+  
+  
   return(upsetdata)
   
 }
+
+#### To create the commun list
+
+
 
 
 #### format data pirateplot

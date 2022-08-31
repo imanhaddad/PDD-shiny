@@ -49,7 +49,7 @@ ui <- dashboardPage(
   dashboardBody(
     
     tabItems(
-      # Read data ----
+      #### Read data ----
       tabItem(tabName = "readData",
               h1("DIA-NN Data"),
               fileInput("dataFile",label = NULL,
@@ -70,7 +70,7 @@ ui <- dashboardPage(
                                     selected = TRUE, inline=T)),
                 
                 
-                column(4,      # Input: Select separator ----
+                column(4,      # Input: Select separator 
                        radioButtons(inputId = "sep", 
                                     label = "Separator",
                                     choices = c(Comma = ",",
@@ -78,7 +78,7 @@ ui <- dashboardPage(
                                                 Tab = "\t"),
                                     selected = "\t", inline=T)),
                 
-                # Input: Select quotes ----
+                # Input: Select quotes 
                 column(4,
                        radioButtons(inputId = "quote", 
                                     label= "Quote",
@@ -101,52 +101,60 @@ ui <- dashboardPage(
       ),
       
       
-      # tables
+      #### Display tables ----
       tabItem(tabName = "tables",
               h2("Proteins"),
-              dataTableOutput('dataTable2'),
+              dataTableOutput('dataTableProteins'),
               downloadButton("downloadData", "Download"),
               h2("Peptide (input data)"),
-              dataTableOutput('dataTable')),
-      # Button
+              dataTableOutput('dataTablePeptides')),
+     
       
       
-      
+      #### Display plot ----
       tabItem(tabName = "graphs",
               
               tabBox( width = 0,
                       
-                      
+                      ##### Boxplot ----
                       tabPanel("Boxplot",  
                                textInput("titleboxplot", "Title of Boxplot", "Title"),
                                textInput("xboxplot", "X label", "Conditions"),
                                textInput("yboxplot", "Y label", "Log2Intensity"),
                                plotlyOutput('boxplot',width = "100%", height = "800"),
                                h2("DATA"), 
-                               dataTableOutput('dataTable3'),
+                               #dataTableOutput('dataTableBoxplot'),
                                downloadButton("downloadDataBoxplot", "Download")),
+                      
+                      ##### Barplot ----
                       tabPanel("Barplot",
                                textInput("titlebarplot", "Title of Barplot", "Title"),
                                textInput("xbarplot", "X label", "Conditions"),
-                               textInput("ybarplot", "Y label", "Log2Intensity"),
-                               plotOutput('barplot',width = "100%", height = "800"),
+                               textInput("ybarplot", "Y label", "nbProt"),
+                               plotlyOutput('barplot',width = "100%", height = "800"),
                                h2("DATA"),
-                               dataTableOutput('dataTable4')),
+                               #dataTableOutput('dataTable4')),
+                               downloadButton("downloadDataBarplot", "Download")),
+                      
+                      ##### Multiscatterplot ----
                       tabPanel("Multiscatterplot",
                                helpText("This may take up to two minutes...."),
                                plotOutput('scatterplot',width = "100%", height = "800")),
+                      
+                      ##### UpsetR Plot ----
                       tabPanel("UpsetR",
                                helpText("This plot is not possible if you have only one sample"),
                                uiOutput('orderselect'),
                                uiOutput('creasing'),
                                plotOutput('upsetR',width = "100%", height = "800")),
                       
+                      ##### Pirateplot (violin plot) ----
                       tabPanel("Distribution CV",
                                helpText("This plot is not possible if you have no technical replicat"),
-                               plotOutput('piratplot',width = "100%", height = "800"))
+                               plotlyOutput('piratplot',width = "100%", height = "800"))
                       
                       
-                      #downloadButton("downloadData", "Download")
+                     
                       
               )              
               
@@ -155,17 +163,17 @@ ui <- dashboardPage(
   )
 )
 
-################################################################################
-# Server
-################################################################################
+
+#### Server ----
+
 
 server <- function(input, output, session) {
   
   data <- reactiveValues()
   
-  #=============================================================================
-  # Preview
-  #=============================================================================
+  
+  ## Preview ----
+  
   output$preview <-  renderDataTable({
     
     req(input$dataFile)
@@ -182,9 +190,9 @@ server <- function(input, output, session) {
   
   
   
-  #=============================================================================
-  # Lecture
-  #=============================================================================
+  
+  ## Integration ----
+  
   observeEvent(input$actBtnVisualisation, {
     
     if(!is.null(input$dataFile$datapath)){
@@ -192,10 +200,13 @@ server <- function(input, output, session) {
                             header = as.logical(input$header),
                             sep = input$sep,
                             quote = input$quote)
+      nbline <- nrow(data$table)
+      nbcol <- ncol(data$table)
+      confirmation <- paste("Your file has",nbline,"lines and",nbcol,"columns")
       sendSweetAlert(
         session = session,
         title = "Done !",
-        text = "Le fichier a bien été lu !",
+        text = confirmation,
         type = "success"
       )
       
@@ -204,39 +215,49 @@ server <- function(input, output, session) {
     
   })
   
-  #=============================================================================
-  # Exploration du tableau
-  #=============================================================================
+  ## Reading and exploration ----
   
-  output$dataTable <- DT::renderDataTable({
+  output$dataTablePeptides <- DT::renderDataTable({
     DT::datatable(data$table, options = list(orderClasses = TRUE,scrollX = TRUE))
   })
   
-  #=============================================================================
-  # Tableau format
-  #=============================================================================
+  ## Format data for datatables and plots ----
   
-  
-  
-  
+  ### Datatable "Proteins" -----
   fileformat <- reactive({
     formatDIANN(data$table)
     
   })
   
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      paste("report_formated.csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(fileformat(), file, row.names = FALSE)
+    })
+  
+  ### Boxplot data ----- 
   fileformat2 <- reactive({
+    
+   boxplotformat(fileformat()) 
+    
+  })
+  
+  ### Barplot data ----- 
+    fileformat3a <- reactive({
     Barformat(fileformat())
     
     
   })
   
-  fileformat3 <- reactive({
-    data_summary(fileformat2(),varname="nbProt",groupnames = "groupe")
-    
-    
-  })
+    fileformat3 <- reactive({
+    data_summary(fileformat3a(),varname="nbProt",groupnames = "groupe")
+    })  
+   
   
-  fileformat4 <- reactive({
+    ### UpsetR data ----- 
+    fileformat4 <- reactive({
     formatUpset(fileformat())
     
     
@@ -247,41 +268,27 @@ server <- function(input, output, session) {
     
     
   })
-  
-  output$orderselect <- renderUI({
-    
-    
-    selectizeInput(inputId="order",
-                   label="Order by",
-                   choices =list("Degree" = "degree","Frequency" = "freq"),
-                   width = '250px',
-                   selected = "1"
-                   
-    )})
-  
-  output$creasing <- renderUI({
-    
-    
-    selectizeInput(inputId="crease",
-                   label="Increasing/Decreasing",
-                   choices =list("Increasing" = "inc","Decreasing" = "dec"),
-                   width = '250px',
-                   selected = "1"
-                   
-    )})  
+
   
   
-  output$dataTable2 <- DT::renderDataTable({
+
+  
+  
+ 
+   
+  ## Datatable for each plot ----
+  
+  output$dataTableProteins <- DT::renderDataTable({
     
     DT::datatable(fileformat(), options = list(orderClasses = TRUE,scrollX = TRUE))
   })
   
-  output$dataTable3 <- DT::renderDataTable({
+  output$dataTableBoxplot <- DT::renderDataTable({
     
     DT::datatable(fileformat2())
   }) 
   
-  output$dataTable4 <- DT::renderDataTable({
+  output$dataTableBarplot <- DT::renderDataTable({
     
     DT::datatable(fileformat3())
   }) 
@@ -296,27 +303,7 @@ server <- function(input, output, session) {
     DT::datatable(fileformat5())
   }) 
   
-  orderdat <- reactive({
-    orderdat <- as.character(input$order)
-    if(orderdat == "degree"){
-      orderdat <- c("degree")
-    }
-    else if(orderdat == "freq"){
-      orderdat <- "freq"
-    }
-    return(orderdat)
-  })
   
-  decrease <- reactive({
-    decrease <- as.character(input$crease)
-    if(decrease == "inc"){
-      decrease <- FALSE
-    }
-    else if(decrease == "dec"){
-      decrease <- TRUE
-    }
-    return(decrease)
-  })
   #output$accessionselect <- renderUI({
   
   # accession <- fileformat()$Protein.Ids
@@ -356,14 +343,48 @@ server <- function(input, output, session) {
   
   
   
-  #=============================================================================
-  # Graphiques
-  #=============================================================================
+  
+  # Plots ----
+  
+  #### Boxplot ----
+  
+  boxplot_output <- reactive({
+    df2 <- fileformat2()
+    p<-ggplot(fileformat2(),aes(x=name,y=value,col=name))+geom_boxplot()+ggtitle(req(input$titleboxplot))+labs(x=input$xboxplot,y=input$yboxplot,colour=input$xboxplot)
+    q <-ggplotly(p)
+    q
+    
+  })
+ 
+  output$boxplot <- renderPlotly(boxplot_output())
   
   
+  ### to download data of boxplot
   
   
-  #Multiscatterplot
+  output$downloadDataBoxplot <- downloadHandler(
+    filename = function() {
+      paste("dataBoxPlot.csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(fileformat2(), file, row.names = FALSE)
+    })
+  
+  #### Barplot ----
+  
+  barplot_output <- reactive({
+    
+    df3 <- fileformat3()
+    ngroup <- nrow(df3)
+    bp <-ggplot(df3,aes(x=groupe,y=nbProt,fill=groupe))+geom_bar(stat="identity")+scale_fill_brewer()+ geom_errorbar(aes(ymin=nbProt-sd,ymax=nbProt+sd),width=0.5)+ggtitle(req(input$titlebarplot))+labs(x=input$xbarplot,y=input$ybarplot)
+    bar <-ggplotly(bp)
+    bar
+  
+  }) 
+  
+  output$barplot <-  renderPlotly(barplot_output())
+  
+  ###Multiscatterplot ----
   
   output$scatterplot <- renderPlot({
     
@@ -373,84 +394,90 @@ server <- function(input, output, session) {
     
   })
   
- 
-  #### Boxplot ----
   
-  plot_output <- reactive({
-    df2 <- boxplotformat(fileformat())
-    p<-ggplot(df2,aes(x=name,y=value,col=name))+geom_boxplot()+ggtitle(req(input$titleboxplot))+labs(x=input$xboxplot,y=input$yboxplot,colour=input$xboxplot)
-    q <-ggplotly(p)
-    q
-    
-  })
+  ###UpsetR----
   
   
-  
-   output$boxplot <- renderPlotly(plot_output())
-    
-   
-    
-     #### save file svg ----
-     output$DownloadBoxPlot <- downloadHandler(
-       filename = function() {
-         paste("boxplot", input$extension, sep = ".")
-       },
-       content = function(file){
-        
-          #ggsave(file, plot_output(), device = input$extension)
-        plotly_IMAGE(plot_output(),format="png",out_file="test.svg")
-       })
-     
-   output$downloadDataBoxplot <- downloadHandler(
-     filename = function() {
-       paste("dataBoxPlot.csv", sep = "")
-     },
-     content = function(file) {
-       write.csv(fileformat2(), file, row.names = FALSE)
-     })
-  
-   
-   
-   
-  output$barplot <- renderPlot({
-    
-    df3 <- fileformat3()
-    ggplot(df3,aes(x=groupe,y=nbProt))+ geom_col(fill="lightgray",color="black")+ geom_errorbar(aes(ymin=nbProt-sd,ymax=nbProt+sd),width=0.5)+coord_flip()
-  })
-  
-  
-  
-  
-  #outfile <- tempfile(fileext='.png')
   output$upsetR <- renderPlot({
     
     df4 <- fileformat4()
     
     p <- UpSetR::upset(data = df4,
+                       text.scale = 3,
                        order.by = orderdat(),
                        decreasing = c(decrease()))
     p
     
   })
   
-  output$piratplot <- renderPlot({
+  
+  
+  output$orderselect <- renderUI({
     
-    df5 <- fileformat5()
-    P<- pirateplot(formula=cv~condition,data=df5,theme=0,pal = "southpark",bean.f.o = .6, point.o = .3,inf.b.o = .8,avg.line.o=1, avg.line.col = "black")
-    p
+    
+    selectizeInput(inputId="order",
+                   label="Order by",
+                   choices =list("Degree" = "degree","Frequency" = "freq"),
+                   width = '250px',
+                   selected = "1"
+                   
+    )})
+  
+  output$creasing <- renderUI({
+    
+    
+    selectizeInput(inputId="crease",
+                   label="Increasing/Decreasing",
+                   choices =list("Increasing" = "inc","Decreasing" = "dec"),
+                   width = '250px',
+                   selected = "1"
+                   
+    )})  
+  
+  
+  
+  orderdat <- reactive({
+    orderdat <- as.character(input$order)
+    if(orderdat == "degree"){
+      orderdat <- c("degree")
+    }
+    else if(orderdat == "freq"){
+      orderdat <- "freq"
+    }
+    return(orderdat)
+  })
+  
+  decrease <- reactive({
+    decrease <- as.character(input$crease)
+    if(decrease == "inc"){
+      decrease <- FALSE
+    }
+    else if(decrease == "dec"){
+      decrease <- TRUE
+    }
+    return(decrease)
   })
   
   
   
+  ###Pirateplot(violin plot)----
+  
+   
+    
+  piratplot_output <- reactive({
+    
+    df5 <- fileformat5()
+    
+    jack<- ggplot(df5,aes(x=condition,y=cv,fill=condition))+geom_violin()+geom_point( color="black",size=0.1, position = position_jitter(w=0.01))+geom_crossbar(stat="summary", fun.y=mean, fun.ymax=mean, fun.ymin=mean,fatten=2, width=.5)+scale_fill_brewer(palette="Spectral")+theme_bw()
+    sparrow <-ggplotly(jack)
+    sparrow
+  })
+  
+  output$piratplot <-  renderPlotly(piratplot_output())
   
   
-  output$downloadData <- downloadHandler(
-    filename = function() {
-      paste("report_formated.csv", sep = "")
-    },
-    content = function(file) {
-      write.csv(fileformat(), file, row.names = FALSE)
-    })
+  
+ 
   
  
   
