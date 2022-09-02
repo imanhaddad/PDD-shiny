@@ -24,4 +24,7 @@ The plots currently present are essentially centered on the global analysis of p
 - `Upset plot` 
 - `Violin plot`
 
+## Installation
 
+You need to install R, RStudio and download the PDD-shiny. In RStudio, you must open the app.R file, click on Run App (top right).
+This will open your default browser and run PDD-shiny locally on your computer. All you have to do is download your report.tsv, check that it is correctly read and click on `Integration`
