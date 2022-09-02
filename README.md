@@ -26,5 +26,5 @@ The plots currently present are essentially centered on the global analysis of p
 
 ## Installation
 
-You need to install R, RStudio and download the PDD-shiny. In RStudio, you must open the app.R file, click on Run App (top right).
+You need to install R, RStudio and download the PDD-shiny. In RStudio, you must open the app.R file, click on Run App (top right). Think to check, only for the first time, if you have all packages. You will see at the top of the script.
 This will open your default browser and run PDD-shiny locally on your computer. All you have to do is download your report.tsv, check that it is correctly read and click on `Integration`
