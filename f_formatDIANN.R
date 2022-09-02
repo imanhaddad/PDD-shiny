@@ -192,7 +192,7 @@ formatListUpsetData <- function(x) {
     toto <- as.numeric(strsplit(as.character(levelintersection[i]),"")[[1]])
     listintersec <- as.data.frame(cbind(versus,toto))
     listintersec <- filter(listintersec,toto!=0)
-    listintersec2 <- paste(listintersec$versus,collapse = "&")
+    listintersec2 <- paste(listintersec$versus,collapse = "_&_")
     colnames(com[[i]]) <- c(listintersec2,"intersection")
     com[[i]] <- com[[i]][-2]
     
