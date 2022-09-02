@@ -21,6 +21,7 @@ library(plyr)
 library(UpSetR)
 library(yarrr)
 library(reticulate)
+library(stringr)
 
 
 #f_source(f_formatDIANN.R)
@@ -146,7 +147,9 @@ ui <- dashboardPage(
                                helpText("This plot is not possible if you have only one sample"),
                                uiOutput('orderselect'),
                                uiOutput('creasing'),
-                               plotOutput('upsetR',width = "100%", height = "800")),
+                               plotOutput('upsetR',width = "100%", height = "800"),
+                               downloadButton("downloadDataUpset", "Download"),
+                               helpText("This plot is not possible if you have only one sample")),
                       
                       ##### Pirateplot (violin plot) ----
                       tabPanel("Distribution CV",
@@ -263,7 +266,13 @@ server <- function(input, output, session) {
     
   })
   
-  fileformat5 <- reactive({
+  dataintersection <- reactive({
+    
+    formatListUpsetData(fileformat4())
+  })
+    
+    ### Violin data ----- 
+    fileformat5 <- reactive({
     formatpirateplot(fileformat())
     
     
@@ -302,44 +311,6 @@ server <- function(input, output, session) {
     
     DT::datatable(fileformat5())
   }) 
-  
-  
-  #output$accessionselect <- renderUI({
-  
-  # accession <- fileformat()$Protein.Ids
-  #selectizeInput(inputId="AccessionProtein",
-  #               label="Accession Choice",
-  #               choices = accession,
-  #               width = '500px',
-  #               selected = "1"
-  
-  #)
-  
-  
-  # })
-  
-  #  output$accessionselect2 <- renderUI({
-  
-  #    accession <- fileformat()$Protein.Ids
-  #   selectizeInput(inputId="AccessionProtein",
-  #                   label="Accession Choice",
-  #                   choices = accession,
-  #                  width = '500px',
-  #                 selected = "54"
-  
-  # )
-  
-  
-  #})
-  
-  
-  
-  
-  
-  
-  
-  
-  
   
   
   
@@ -460,6 +431,14 @@ server <- function(input, output, session) {
   
   
   
+  output$downloadDataUpset <- downloadHandler(
+    filename = function() {
+      paste("dataUpsetIntersection.csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(dataintersection(), file, row.names = FALSE)
+    })
+  
   ###Pirateplot(violin plot)----
   
    
@@ -487,10 +466,7 @@ server <- function(input, output, session) {
 
 
 
-#p<-profvis::profvis(runApp(shinyApp(ui, server)))
-#htmlwidgets::saveWidget(p, "profile.html")
-# Can open in browser from R
-#browseURL("profile.html")
+
 
 shinyApp(ui, server)
 

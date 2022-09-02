@@ -143,14 +143,7 @@ formatUpset <- function(x) {
   upsetdata[is.na(upsetdata)]<- 0
   
   
-  #data_with_intersection <- upsetdata %>%
-   # unite(col = "intersection", -c("Protein.Ids"), sep = "")
-  
- # test <- data_with_intersection %>%
-  #  group_by(intersection)%>%
-   # nest()%>%
-    #select(data)%>%
-    #unlist(recursive = F)
+ 
   
   
   
@@ -159,9 +152,59 @@ formatUpset <- function(x) {
   
 }
 
-#### To create the commun list
+#### To create the commun list data
 
-
+formatListUpsetData <- function(x) {
+  
+  group <- colnames(x)
+  
+  group <- group[-1]
+  
+  group <- as.factor(group)
+  
+  
+  nameintersection <- paste(levels(group),collapse = "_")
+  
+  
+  
+  
+  data_with_intersection <- x %>%
+    unite(col = "intersection", -c("Protein.Ids"), sep = "")
+  
+  
+  
+  allintersection <- as.factor(data_with_intersection$intersection)
+  
+  levelintersection <- levels(allintersection)
+  
+  nbintersection <- nlevels(allintersection)
+  
+  versus <- str_split(nameintersection,"_")
+  
+  versus <- unlist(versus)
+  
+  com=vector(mode = "list",nbintersection)
+  
+  i <- for (i in 1:nbintersection)
+  {
+  
+    com[[i]] <- filter(data_with_intersection,intersection==levelintersection[i])
+    toto <- as.numeric(strsplit(as.character(levelintersection[i]),"")[[1]])
+    listintersec <- as.data.frame(cbind(versus,toto))
+    listintersec <- filter(listintersec,toto!=0)
+    listintersec2 <- paste(listintersec$versus,collapse = "&")
+    colnames(com[[i]]) <- c(listintersec2,"intersection")
+    com[[i]] <- com[[i]][-2]
+    
+    
+    
+  }
+ 
+  dataintersection <- rbind.fill(com) 
+  return(dataintersection)
+  
+  
+}
 
 
 #### format data pirateplot
