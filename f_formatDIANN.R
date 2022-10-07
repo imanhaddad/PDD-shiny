@@ -1,12 +1,64 @@
-formatDIANN <- function(x){
-  table1 <- select(x,Protein.Ids,Protein.Names,Run,Modified.Sequence,Precursor.Charge,contains("PG"),contains("Protein"),Precursor.Normalised)
+
+duplicated2 <- function(x){
+  if (sum(dup <- duplicated(x))==0)
+    return(dup)
+  if (class(x) %in% c("data.frame","matrix"))
+    duplicated(rbind(x[dup,],x))[-(1:sum(dup))]
+  else duplicated(c(x[dup],x))[-(1:sum(dup))]
+}
+
+protcov <- function(x,y){
+  
+  table1 <- select(x,Protein.Ids,Stripped.Sequence)
+  table1$Protein.Ids<-trimws(table1$Protein.Ids,whitespace = ";.*")
+  table2 <- table1[!duplicated(table1),]
+  #pepandprot <- setDT(table2)[,.(Stripped.Sequence=toString(Stripped.Sequence), NBPEP=.N),by=Protein.Ids]
+  MyListeAccession <- table2$Protein.Ids
+  accessiononly <- str_split_fixed(names(y),"[|]",n=3)
+  names(y) <- accessiononly[,2]
+  i <- for (i in 1:length(MyListeAccession))
+  {
+    
+    table2$sequencet[i]<-y[MyListeAccession[i]]
+    
+  } 
+  
+  total_cov <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptides = Stripped.Sequence)
+  total_coverage <- select(total_cov,Protein.Ids,coverage)
+  total_coverage$coverage <- round(total_coverage$coverage,2)
+  total_coverage<- as.data.frame(total_coverage)
+  total_coverage
+  
+}
+
+formatDIANN <- function(x,y){ #x=data.table and y=total_coverage
+  table1 <- select(x,Protein.Ids,Protein.Names,Run,Precursor.Id,Precursor.Charge,contains("PG"),contains("Protein"),Precursor.Normalised)
   table1$difference <- table1$PG.Normalised-table1$Precursor.Normalised
   table2 <- filter(table1,difference==0)
-  table3 <- select(table2,Protein.Ids,Run,Modified.Sequence)
+  table3 <- select(table2,Protein.Ids,Protein.Names,Run,Precursor.Id) 
+  table4 <- table3[duplicated2(table3[1:3]),]
+  if (nrow(table4)!=0)
+  {
+  table5 <- unite(table4,col="merge",Protein.Ids,Protein.Names,Run,sep="_")
+  table5$Precursor.Id <- paste0(table5$Precursor.Id,"/")
+  table6 <- reshape2::dcast(data=table5,formula=merge~Precursor.Id,value.var = 'Precursor.Id')
+  table6 [is.na(table6)] <-""
+  namecolonne <- colnames(table6)
+  namecolonne <- namecolonne[-1]
+  table7 <- unite(table6,col="Sequence(s)",c(namecolonne),sep="")
+  table7b <- str_split_fixed(table7$merge,"[_]",n=4)
+  table7b <- as.data.frame(table7b)
+  table7b<-unite(table7b,col="Protein.Names",V2,V3,sep="_")
+  table7 <- cbind(table7b,table7)
+  table7$merge <- NULL
+  colnames(table7)<- c("Protein.Ids","Protein.Names","Run","Precursor.Id")
   
+  table3b <- anti_join(table3,table4)
+  
+  table3 <- rbind(table3b,table7)}
   
   #Je compte le nb de peptide ou de run
-  aggregat1<- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'Modified.Sequence',fun.aggregate = function(x) length(unique(x)))
+  aggregat1<- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'Precursor.Id',fun.aggregate = function(x) length(unique(x)))
   
   #Changer titre colonne run en nb de peptide
   aggregat1r <-rename_with(aggregat1,~paste0("nb.peptide.",.), -c(Protein.Ids,Protein.Names))
@@ -16,21 +68,42 @@ formatDIANN <- function(x){
   
   #Aggregation en fonction de PG.MaxLFQ, j'ai fait mean, puisque la valeur est partout la même
   
-  aggregat2 <- reshape2::dcast(data = table1,formula = Protein.Ids ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = mean)
-  aggregat2r <-rename_with(aggregat2,~paste0("MaxLFQ.",.), -Protein.Ids)
+  aggregat2 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = mean)
+  aggregat2r <-rename_with(aggregat2,~paste0("MaxLFQ.",.), -c(Protein.Ids,Protein.Names))
   
-  aggregat3 <- reshape2::dcast(data = table1,formula = Protein.Ids ~ Run,value.var = 'Protein.Q.Value',fun.aggregate = mean)
+  aggregat3 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'Protein.Q.Value',fun.aggregate = mean)
   aggregat3r <-rename_with(aggregat3,~paste0("Protein.Q.Value.",.), -Protein.Ids)
   
-  aggregat4 <- reshape2::dcast(data=table3,formula = Protein.Ids~Run ,value.var = 'Modified.Sequence')
+  #check if you have an unique sequence by protein
+  aggregat4r <- reshape2::dcast(data=table3,formula = Protein.Ids+Protein.Names~Run ,value.var = 'Precursor.Id',fun.aggregate = function(x) length(unique(x)))
+  
+  aggregat4 <- reshape2::dcast(data=table3,formula = Protein.Ids+Protein.Names~Run ,value.var = 'Precursor.Id')
   
   
-  final <- Merge (aggregat1r,aggregat2r,aggregat3r,aggregat4,id=~Protein.Ids,all=TRUE)
+  
+  
+  final <- Merge (aggregat1r,aggregat2r,aggregat3r,aggregat4,y,id=~Protein.Ids,all=TRUE)
+  
+  
+  
   final
 }
 
 
 
+
+
+
+
+
+count_condition <- function(x){
+  
+  cond <- as.data.frame(table(x$Run))
+  cond$Var1 <- gsub("_[0-9]","",cond$Var1)
+  recap <- ddply(cond,.(Var1),c("nrow"))
+  colnames(recap) <- c("Conditions","Nb of replicat")
+  recap
+}
 ggpairsformat <- function(x){
   df <- select(x,starts_with("MaxLFQ"))
   #df[is.na(df)] <- 0
@@ -42,6 +115,7 @@ boxplotformat <- function(x){
   
   #coldata <- filter(x,Protein.Ids == y)
   coldata <- select(x,starts_with("MaxLFQ"))
+  coldata[is.na(coldata)] <- 0
   coldata <- log2(coldata)
   a <- ncol(coldata)
   titrecol <- colnames(coldata)

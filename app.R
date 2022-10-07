@@ -22,6 +22,7 @@ library(UpSetR)
 library(yarrr)
 library(reticulate)
 library(stringr)
+library(protr)
 
 
 #f_source(f_formatDIANN.R)
@@ -56,6 +57,11 @@ ui <- dashboardPage(
               fileInput("dataFile",label = NULL,
                         buttonLabel = "Browse...",
                         placeholder = "No file selected"),
+              h2("Fasta file (if you want %coverage of protein)"),
+              fileInput("fastaFile",label = NULL,
+                        buttonLabel = "Browse...",
+                        placeholder = "No file selected"
+                        ),
               
               
               fluidRow(
@@ -109,7 +115,7 @@ ui <- dashboardPage(
               downloadButton("downloadData", "Download"),
               h2("Peptide (input data)"),
               dataTableOutput('dataTablePeptides')),
-     
+              
       
       
       #### Display plot ----
@@ -173,7 +179,7 @@ ui <- dashboardPage(
 server <- function(input, output, session) {
   
   data <- reactiveValues()
-  
+  data2 <- reactiveValues()
   
   ## Preview ----
   
@@ -213,10 +219,42 @@ server <- function(input, output, session) {
         type = "success"
       )
       
-      updateTabItems(session, "tabs", selected = "tables")
+     
+      
+      
     }
-    
+    if(!is.null(input$fastaFile$datapath)){
+      data2$table = readFASTA(input$fastaFile$datapath)
+      cat("test si ça marche")
+      nbseq = length(data2$table)
+      confirmation <- paste("Your fasta file has",nbseq,"sequence(s)")
+      sendSweetAlert(
+        session = session,
+        title = "Done !",
+        text = confirmation,
+        type = "success"
+      )  
+    } 
+    updateTabItems(session, "tabs", selected = "tables")
   })
+  
+ # observeEvent(input$test, {
+    
+  #  if(!is.null(input$fastaFile$datapath)){
+  #    data2$table = readFASTA(input$fastaFile$datapath)
+   #   nbseq = length(data2$table)
+  #    confirmation <- paste("Your fasta file has",nbseq,"sequence(s)")
+   #  sendSweetAlert(
+  #     session = session,
+  #     title = "Done !",
+  #     text = confirmation,
+  #     type = "success"
+  #   )
+      
+  #   updateTabItems(session, "tabs", selected = "tables")
+  #   }
+    
+#}) 
   
   ## Reading and exploration ----
   
@@ -227,10 +265,25 @@ server <- function(input, output, session) {
   ## Format data for datatables and plots ----
   
   ### Datatable "Proteins" -----
+  
+  
+  cover<- reactive({
+    
+    protcov(data$table,data2$table)
+  })
+  
+  output$dataTablecover <- DT::renderDataTable({
+    DT::datatable(cover())
+  })
+ 
+  
   fileformat <- reactive({
-    formatDIANN(data$table)
+    formatDIANN(data$table,cover())
     
   })
+  
+ 
+  
   
   output$downloadData <- downloadHandler(
     filename = function() {
@@ -278,10 +331,6 @@ server <- function(input, output, session) {
     
   })
 
-  
-  
-
-  
   
  
    
