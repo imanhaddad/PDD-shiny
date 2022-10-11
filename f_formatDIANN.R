@@ -10,29 +10,85 @@ duplicated2 <- function(x){
 protcov <- function(x,y){
   
   table1 <- select(x,Protein.Ids,Stripped.Sequence)
+  
   table1$Protein.Ids<-trimws(table1$Protein.Ids,whitespace = ";.*")
+  
   table2 <- table1[!duplicated(table1),]
   #pepandprot <- setDT(table2)[,.(Stripped.Sequence=toString(Stripped.Sequence), NBPEP=.N),by=Protein.Ids]
   MyListeAccession <- table2$Protein.Ids
-  accessiononly <- str_split_fixed(names(y),"[|]",n=3)
-  names(y) <- accessiononly[,2]
+  
+  table1b <- select(x,Protein.Ids,Run,Stripped.Sequence)
+  table1b$Protein.Ids<-trimws(table1$Protein.Ids,whitespace = ";.*")
+  runs <- as.factor(table1b$Run)
+  runs2 <- levels(runs)
+  
+  
+  #accessiononly <- str_split_fixed(names(y),"[|]",n=3)
+  #names(y) <- accessiononly[,2]
+  #startTime <- Sys.time()
   i <- for (i in 1:length(MyListeAccession))
   {
+    #access <- grep(MyListeAccession[i],names(y)) 1.82 min
+    #access <- which(str_detect(names(y),MyListeAccession[i])) 1.57 min
+    #access <- str_which(names(y),MyListeAccession[i]) 1.29 min
+    access <- which(grepl(pattern=MyListeAccession[i],names(y),fixed = TRUE,useBytes = TRUE)) #38sec
+    table2$sequencet[i]<-y[[access]]
     
-    table2$sequencet[i]<-y[MyListeAccession[i]]
+
+    
     
   } 
+  #sleep_func()
+  #endTime <- Sys.time()
+  #print(endTime - startTime)
   
-  total_cov <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptides = Stripped.Sequence)
+total_cov <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptides = Stripped.Sequence)
   total_coverage <- select(total_cov,Protein.Ids,coverage)
   total_coverage$coverage <- round(total_coverage$coverage,2)
   total_coverage<- as.data.frame(total_coverage)
-  total_coverage
+  total_coverage <- total_coverage[!duplicated(total_coverage),]
+  
+  
+  table2b <- select(table2,-Stripped.Sequence)  
+  table2b <- table2b[!duplicated(table2b),]
+  coveragebyrun = c()
+  tablecover = vector("list",length(runs2))
+  
+  j <- for(j in 1:length(runs2))
+  {
+    coverrun <- filter(table1b,Run==runs2[j])
+    
+    coverrun2 <- merge(coverrun,table2b,by="Protein.Ids")
+    coveragebyrun <-  calculate_sequence_coverage(coverrun2,protein_sequence =sequencet,peptides = Stripped.Sequence )
+    coveragebyrun <- select(coveragebyrun,Protein.Ids,coverage)
+    coveragebyrun$coverage <- round(coveragebyrun$coverage,2)
+    colnames(coveragebyrun) <- c("Protein.Ids",paste0(runs2[j],"_coverage"))
+    coveragebyrun <- coveragebyrun[!duplicated(coveragebyrun),]
+    tablecover [[j]] <- coveragebyrun
+    
+  }
+  
+  
+  tablecover2 <- merge(tablecover[[1]],tablecover[[2]],by="Protein.Ids",all=TRUE)
+  
+  j <- for(j in 3:length(runs2))
+  {
+    
+    tablecover2 <- merge(tablecover2,tablecover[j],by="Protein.Ids", all=TRUE)
+    
+  }
+  
+  colnames(tablecover2) <- gsub("X","",colnames(tablecover2))
+  
+  total_coverage <- merge(tablecover2,total_coverage,by="Protein.Ids")
+  
+  return(total_coverage)
   
 }
 
 formatDIANN <- function(x,y){ #x=data.table and y=total_coverage
   table1 <- select(x,Protein.Ids,Protein.Names,Run,Precursor.Id,Precursor.Charge,contains("PG"),contains("Protein"),Precursor.Normalised)
+  table1$Protein.Ids <- trimws(table1$Protein.Ids,whitespace = ";.*")
   table1$difference <- table1$PG.Normalised-table1$Precursor.Normalised
   table2 <- filter(table1,difference==0)
   table3 <- select(table2,Protein.Ids,Protein.Names,Run,Precursor.Id) 
