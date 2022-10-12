@@ -82,6 +82,7 @@ total_cov <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptid
   
   total_coverage <- merge(tablecover2,total_coverage,by="Protein.Ids")
   
+  
   return(total_coverage)
   
 }
@@ -89,6 +90,22 @@ total_cov <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptid
 formatDIANN <- function(x,y){ #x=data.table and y=total_coverage
   table1 <- select(x,Protein.Ids,Protein.Names,Run,Precursor.Id,Precursor.Charge,contains("PG"),contains("Protein"),Precursor.Normalised)
   table1$Protein.Ids <- trimws(table1$Protein.Ids,whitespace = ";.*")
+  table1$Protein.Names <- trimws(table1$Protein.Names,whitespace = ";.*")
+  
+  checkname <-  select(table1,Protein.Ids,Protein.Names)
+                               
+  checkname$idname <- paste(checkname$Protein.Ids,"_",checkname$Protein.Names)
+  checkname2 <- select(checkname,idname)
+  checkname2 <- unique(checkname2)
+  checkname3 <- str_split_fixed(checkname2$idname,"_",n=2)
+  checkname3 <- as.data.frame(checkname3)
+  checkname4 <- checkname3[!duplicated(checkname3$V1),]
+  colnames(checkname4) <- c("Protein.Ids","Protein.Names")
+  checkname4$Protein.Ids <- gsub('\\s+','',checkname4$Protein.Ids)
+  checkname4$Protein.Names <- gsub('\\s+','',checkname4$Protein.Names)
+  table1$Protein.Names <- NULL
+  table1 <- merge(checkname4,table1,by="Protein.Ids")
+  #table1 <- table1[!duplicated(table1[,1:4]),]
   table1$difference <- table1$PG.Normalised-table1$Precursor.Normalised
   table2 <- filter(table1,difference==0)
   table3 <- select(table2,Protein.Ids,Protein.Names,Run,Precursor.Id) 
@@ -162,7 +179,7 @@ count_condition <- function(x){
 }
 ggpairsformat <- function(x){
   df <- select(x,starts_with("MaxLFQ"))
-  #df[is.na(df)] <- 0
+  df[is.na(df)] <- 0
   dflog <- log2(df) 
   dflog
 }

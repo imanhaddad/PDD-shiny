@@ -24,7 +24,7 @@ library(reticulate)
 library(stringr)
 library(protr)
 library(protti)
-
+library(showtext)
 
 #f_source(f_formatDIANN.R)
 options(shiny.maxRequestSize=100*1024^5)
@@ -112,10 +112,10 @@ ui <- dashboardPage(
       #### Display tables ----
       tabItem(tabName = "tables",
               h2("Proteins"),
-              dataTableOutput('dataTableProteins'),
+              shinycssloaders::withSpinner(dataTableOutput('dataTableProteins')),
               downloadButton("downloadData", "Download"),
               h2("Peptide (input data)"),
-              dataTableOutput('dataTablePeptides')),
+              shinycssloaders::withSpinner(dataTableOutput('dataTablePeptides'))),
               
       
       
@@ -213,31 +213,27 @@ server <- function(input, output, session) {
       nbline <- nrow(data$table)
       nbcol <- ncol(data$table)
       confirmation <- paste("Your file has",nbline,"lines and",nbcol,"columns")
-      sendSweetAlert(
-        session = session,
-        title = "Done !",
-        text = confirmation,
-        type = "success"
-      )
+        
+      if(!is.null(input$fastaFile$datapath)){
+        data2$table = readFASTA(input$fastaFile$datapath)
+        nbseq = length(data2$table)
+        confirmation <- paste("Your file has",nbline,"lines and",nbcol,"columns and","Your fasta file has",nbseq,"sequence(s)")
+        sendSweetAlert(
+          session = session,
+          title = "Done !",
+          text = confirmation,
+          type = "success") 
+         
+      } 
+      
       
      
-      
-      
     }
-    if(!is.null(input$fastaFile$datapath)){
-      data2$table = readFASTA(input$fastaFile$datapath)
-      cat("test si ça marche")
-      nbseq = length(data2$table)
-      confirmation <- paste("Your fasta file has",nbseq,"sequence(s)")
-      sendSweetAlert(
-        session = session,
-        title = "Done !",
-        text = confirmation,
-        type = "success"
-      )  
-    } 
+    
+     
     updateTabItems(session, "tabs", selected = "tables")
   })
+  
   
  # observeEvent(input$test, {
     
@@ -339,6 +335,7 @@ server <- function(input, output, session) {
   
   output$dataTableProteins <- DT::renderDataTable({
     
+    Sys.sleep(1)
     DT::datatable(fileformat(), options = list(orderClasses = TRUE,scrollX = TRUE))
   })
   
@@ -410,7 +407,7 @@ server <- function(input, output, session) {
   output$scatterplot <- renderPlot({
     
     df <- ggpairsformat(fileformat())    
-    ggpairs(df) 
+    ggpairs(df,upper = list(continuous = wrap("cor", family="sans"))) 
     
     
   })
