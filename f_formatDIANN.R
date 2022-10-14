@@ -128,7 +128,8 @@ formatDIANN <- function(x,y){ #x=data.table and y=total_coverage
   
   table3b <- anti_join(table3,table4)
   
-  table3 <- rbind(table3b,table7)}
+  table3 <- rbind(table3b,table7)
+  }
   
   #Je compte le nb de peptide ou de run
   aggregat1<- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'Precursor.Id',fun.aggregate = function(x) length(unique(x)))
@@ -141,7 +142,8 @@ formatDIANN <- function(x,y){ #x=data.table and y=total_coverage
   
   #Aggregation en fonction de PG.MaxLFQ, j'ai fait mean, puisque la valeur est partout la même
   
-  aggregat2 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = mean)
+  #aggregat2 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = mean)
+  aggregat2 <- reshape2::dcast(data = table2,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = sum)
   aggregat2r <-rename_with(aggregat2,~paste0("MaxLFQ.",.), -c(Protein.Ids,Protein.Names))
   
   aggregat3 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'Protein.Q.Value',fun.aggregate = mean)
