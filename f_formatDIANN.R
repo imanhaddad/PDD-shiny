@@ -9,17 +9,31 @@ duplicated2 <- function(x){
 
 protcov <- function(x,y){
   
+  tablebyrun <- select(x,Protein.Ids,Run,Stripped.Sequence)
   table1 <- select(x,Protein.Ids,Stripped.Sequence)
   
-  table1$Protein.Ids<-trimws(table1$Protein.Ids,whitespace = ";.*")
+  table1a <- filter(table1,!grepl(";",Protein.Ids)) #tables des ID unique (pas de ;)
+  table1b <- filter(table1,grepl(";",Protein.Ids)) #Table des groupes d'ID (avec un ou plusieurs ;)
+  table1b$Protein.Idsbis <- table1b$Protein.Ids
+  table1bb <-table1b %>%
+    mutate(Protein.Ids= strsplit(Protein.Ids, ";")) %>%
+    unnest(Protein.Ids)
+  #Pour séparer les différents ID (tout en gardant l'info du groupe) afin de pouvoir les utiliser contre la protein database
   
-  table2 <- table1[!duplicated(table1),]
-  #pepandprot <- setDT(table2)[,.(Stripped.Sequence=toString(Stripped.Sequence), NBPEP=.N),by=Protein.Ids]
+  
+  
+  table2b <- table1bb[!duplicated(table1bb),]
+  
+  table2 <- table1a[!duplicated(table1a),]
+  
   MyListeAccession <- table2$Protein.Ids
   
-  table1b <- select(x,Protein.Ids,Run,Stripped.Sequence)
-  table1b$Protein.Ids<-trimws(table1$Protein.Ids,whitespace = ";.*")
-  runs <- as.factor(table1b$Run)
+  
+  MyListeAccessionb <- table2b$Protein.Ids
+  
+  #table1b <- select(x,Protein.Ids,Run,Stripped.Sequence)
+  #table1b$Protein.Ids<-trimws(table1$Protein.Ids,whitespace = ";.*")
+  runs <- as.factor(x$Run)
   runs2 <- levels(runs)
   
   
@@ -34,53 +48,93 @@ protcov <- function(x,y){
     access <- which(grepl(pattern=MyListeAccession[i],names(y),fixed = TRUE,useBytes = TRUE)) #38sec
     table2$sequencet[i]<-y[[access]]
     
-
+  }
+  
+  i <- for (i in 1:length(MyListeAccessionb))
+  {
+    #access <- grep(MyListeAccession[i],names(y)) 1.82 min
+    #access <- which(str_detect(names(y),MyListeAccession[i])) 1.57 min
+    #access <- str_which(names(y),MyListeAccession[i]) 1.29 min
+    access <- which(grepl(pattern=MyListeAccessionb[i],names(y),fixed = TRUE,useBytes = TRUE)) #38sec
+    table2b$sequencet[i]<-y[[access]]
     
-    
-  } 
+  }
+  
   #sleep_func()
   #endTime <- Sys.time()
   #print(endTime - startTime)
   
-total_cov <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptides = Stripped.Sequence)
-  total_coverage <- select(total_cov,Protein.Ids,coverage)
-  total_coverage$coverage <- round(total_coverage$coverage,2)
-  total_coverage<- as.data.frame(total_coverage)
-  total_coverage <- total_coverage[!duplicated(total_coverage),]
+  #Calcul du pourcentage de couverture totale     
+  total_cova <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptides = Stripped.Sequence)
+  total_covb <-calculate_sequence_coverage(table2b,protein_sequence=sequencet,peptides = Stripped.Sequence) 
+  total_cova$coverage <- round(total_cova$coverage,2)
+  total_covb$coverage <- round(total_covb$coverage,2)
+  
+  #Mis en forme de l'info pour chaque Id dans le cas du groupe
+  total_covb2 <- select(total_covb,Protein.Idsbis,coverage)
+  total_covb2b <- total_covb2[!duplicated(total_covb2),]
+  total_covb3 <- total_covb2b %>% 
+    group_by(Protein.Idsbis) %>% 
+    dplyr::summarise(across(everything(), str_c, collapse="/")) 
+  
+  colnames(total_covb3) <- c("Protein.Ids","coverage")
+  
+  total_cova2 <- select(total_cova,Protein.Ids,coverage)
+  total_cova3 <- total_cova2[!duplicated(total_cova2),]
+
+  total_coverage <- rbind(total_cova3,total_covb3)
   
   
-  table2b <- select(table2,-Stripped.Sequence)  
-  table2b <- table2b[!duplicated(table2b),]
+  table2byrun <- select(table2,-Stripped.Sequence) 
+  table2byrun$Protein.Idsbis <- table2byrun$Protein.Ids
+  table2byrunb <- select(table2b,-Stripped.Sequence)
+  table2byrun <- rbind(table2byrun,table2byrunb)
+  
+  tablebyrun2 <- merge (table2byrun,tablebyrun, by.x="Protein.Idsbis",by.y="Protein.Ids")
+  
+  table2byrun <- table2byrun[!duplicated(table2byrun),]
   coveragebyrun = c()
   tablecover = vector("list",length(runs2))
   
   j <- for(j in 1:length(runs2))
   {
-    coverrun <- filter(table1b,Run==runs2[j])
+    coverrun <- filter(tablebyrun2,Run==runs2[j])
     
-    coverrun2 <- merge(coverrun,table2b,by="Protein.Ids")
-    coveragebyrun <-  calculate_sequence_coverage(coverrun2,protein_sequence =sequencet,peptides = Stripped.Sequence )
-    coveragebyrun <- select(coveragebyrun,Protein.Ids,coverage)
+    #coverrun2 <- merge(coverrun,table2byrun,by="Protein.Ids")
+    coveragebyrun <-  calculate_sequence_coverage(coverrun,protein_sequence =sequencet,peptides = Stripped.Sequence )
+    coveragebyrun <- select(coveragebyrun,Protein.Ids,Protein.Idsbis,coverage)
     coveragebyrun$coverage <- round(coveragebyrun$coverage,2)
-    colnames(coveragebyrun) <- c("Protein.Ids",paste0(runs2[j],"_coverage"))
+    colnames(coveragebyrun) <- c("Protein.Ids","Protein.Idsbis",paste0(runs2[j],"_coverage"))
     coveragebyrun <- coveragebyrun[!duplicated(coveragebyrun),]
     tablecover [[j]] <- coveragebyrun
     
   }
   
   
-  tablecover2 <- merge(tablecover[[1]],tablecover[[2]],by="Protein.Ids",all=TRUE)
+  tablecover2 <- merge(tablecover[[1]],tablecover[[2]],by=c("Protein.Ids","Protein.Idsbis"),all=TRUE)
   
   j <- for(j in 3:length(runs2))
   {
     
-    tablecover2 <- merge(tablecover2,tablecover[j],by="Protein.Ids", all=TRUE)
+    tablecover2 <- merge(tablecover2,tablecover[j],by=c("Protein.Ids","Protein.Idsbis"), all=TRUE)
     
   }
   
   colnames(tablecover2) <- gsub("X","",colnames(tablecover2))
   
-  total_coverage <- merge(tablecover2,total_coverage,by="Protein.Ids")
+  #separer à nouveau les groupes et les uniques
+  tablecover2a <- filter(tablecover2,!grepl(";",Protein.Idsbis)) #tables des ID unique (pas de ;)
+  tablecover2a$Protein.Idsbis <- NULL
+  tablecover2b <- filter(tablecover2,grepl(";",Protein.Idsbis))
+  tablecover3b <- tablecover2b %>% 
+    group_by(Protein.Idsbis) %>% 
+    dplyr::summarise(across(everything(), str_c, collapse="/")) 
+  tablecover3b$Protein.Ids <- NULL
+  names(tablecover3b)[names(tablecover3b)=='Protein.Idsbis'] <- "Protein.Ids"
+    
+  tablecover3 <- rbind(tablecover2a,tablecover3b)
+  
+  total_coverage <- merge(tablecover3,total_coverage,by="Protein.Ids")
   
   
   return(total_coverage)
@@ -89,23 +143,9 @@ total_cov <-calculate_sequence_coverage(table2,protein_sequence=sequencet,peptid
 
 formatDIANN <- function(x,y){ #x=data.table and y=total_coverage
   table1 <- select(x,Protein.Ids,Protein.Names,Run,Precursor.Id,Precursor.Charge,contains("PG"),contains("Protein"),Precursor.Normalised)
-  table1$Protein.Ids <- trimws(table1$Protein.Ids,whitespace = ";.*")
-  table1$Protein.Names <- trimws(table1$Protein.Names,whitespace = ";.*")
+  #table1$Protein.Ids <- trimws(table1$Protein.Ids,whitespace = ";.*")
+  #table1$Protein.Names <- trimws(table1$Protein.Names,whitespace = ";.*")
   
-  checkname <-  select(table1,Protein.Ids,Protein.Names)
-                               
-  checkname$idname <- paste(checkname$Protein.Ids,"_",checkname$Protein.Names)
-  checkname2 <- select(checkname,idname)
-  checkname2 <- unique(checkname2)
-  checkname3 <- str_split_fixed(checkname2$idname,"_",n=2)
-  checkname3 <- as.data.frame(checkname3)
-  checkname4 <- checkname3[!duplicated(checkname3$V1),]
-  colnames(checkname4) <- c("Protein.Ids","Protein.Names")
-  checkname4$Protein.Ids <- gsub('\\s+','',checkname4$Protein.Ids)
-  checkname4$Protein.Names <- gsub('\\s+','',checkname4$Protein.Names)
-  table1$Protein.Names <- NULL
-  table1 <- merge(checkname4,table1,by="Protein.Ids")
-  #table1 <- table1[!duplicated(table1[,1:4]),]
   table1$difference <- table1$PG.Normalised-table1$Precursor.Normalised
   table2 <- filter(table1,difference==0)
   table3 <- select(table2,Protein.Ids,Protein.Names,Run,Precursor.Id) 
@@ -143,7 +183,7 @@ formatDIANN <- function(x,y){ #x=data.table and y=total_coverage
   #Aggregation en fonction de PG.MaxLFQ, j'ai fait mean, puisque la valeur est partout la même
   
   #aggregat2 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = mean)
-  aggregat2 <- reshape2::dcast(data = table2,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = sum)
+  aggregat2 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'PG.MaxLFQ',fun.aggregate = mean)
   aggregat2r <-rename_with(aggregat2,~paste0("MaxLFQ.",.), -c(Protein.Ids,Protein.Names))
   
   aggregat3 <- reshape2::dcast(data = table1,formula = Protein.Ids+Protein.Names ~ Run,value.var = 'Protein.Q.Value',fun.aggregate = mean)
@@ -384,7 +424,7 @@ formatpirateplot <- function(x) {
     data$condition <- name
     
     final <- rbind(final,data)
-    
+    final <- na.omit(final)
     
     
     
